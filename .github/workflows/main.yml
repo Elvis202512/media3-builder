@@ -25,17 +25,29 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build nasm
 
-      - name: Clone Official Google libgav1 Source
+      - name: Clone Google libgav1 & Abseil Dependencies
         run: |
-          echo "=== Clonage du moteur libgav1 ==="
+          echo "=== 1. Clonage du moteur principal libgav1 ==="
           git clone https://chromium.googlesource.com/codecs/libgav1 libraries/decoder_av1/src/main/jni/libgav1
+          
+          echo "=== 2. Clonage de la dépendance obligatoire Abseil ==="
+          mkdir -p libraries/decoder_av1/src/main/jni/libgav1/third_party
+          git clone https://github.com/abseil/abseil-cpp.git libraries/decoder_av1/src/main/jni/libgav1/third_party/abseil-cpp
 
       - name: Compile Real AAR with Native Libs
         run: ./gradlew :lib-decoder-av1:assembleRelease
 
       - name: Upload Finished Real AAR
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: media3-decoder-gav1-real
           path: |
             **/*.aar
+
+      - name: Print CMake Logs on Failure
+        if: failure()
+        run: |
+          echo "=== [DIAGNOSTIC] AFFICHAGE DES ERREURS DE COMPILATION C++ ==="
+          find libraries/decoder_av1/.cxx -name "CMakeError.log" -exec cat {} \; || true
+          find libraries/decoder_av1/.cxx -name "cmake_output.txt" -exec cat {} \; || true
