@@ -1,7 +1,5 @@
 name: Build Media3 Decoder AV1
-
-on:
-  workflow_dispatch:
+on: [workflow_dispatch] # Permet de lancer le build d'un simple clic
 
 jobs:
   build:
@@ -11,7 +9,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: 'androidx/media'
-          ref: '1.5.1'  # ou une version plus récente (1.9+ recommandé pour dav1d)
+          ref: '1.5.1'
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
@@ -21,41 +19,22 @@ jobs:
 
       - name: Setup Android SDK & NDK
         uses: android-actions/setup-android@v3
-        with:
-          # Optionnel : forcer une version récente du NDK
-          ndk-version: 'r27'  # ou r26b / r27b selon la doc
 
       - name: Install build dependencies (Meson, Ninja, nasm)
         run: |
           sudo apt-get update
           sudo apt-get install -y meson ninja-build nasm
 
-      - name: Prepare AV1 decoder (fetch + build dav1d)
+      - name: Fetch AV1 Decoder Sources
         run: |
           cd libraries/decoder_av1/src/main/jni
-
-          # Clone cpu_features
-          git clone https://github.com/google/cpu_features
-
-          # Clone dav1d
-          git clone https://code.videolan.org/videolan/dav1d.git
-
-          # Variables
-          AV1_MODULE_PATH="$(pwd)/../.."  # ajuste si besoin
-          NDK_PATH=$ANDROID_NDK_ROOT
-          HOST_PLATFORM="linux-x86_64"
-
-          echo "NDK_PATH=$NDK_PATH"
-          echo "HOST_PLATFORM=$HOST_PLATFORM"
-
-          # Build dav1d
-          ./build_dav1d.sh "$AV1_MODULE_PATH" "$NDK_PATH" "$HOST_PLATFORM"
+          ./fetch_dav1d.sh
 
       - name: Compile AAR
-        run: ./gradlew :libraries:decoder_av1:assembleRelease --no-daemon --stacktrace
+        run: ./gradlew :libraries:decoder_av1:assembleRelease
 
       - name: Upload Finished AAR
         uses: actions/upload-artifact@v4
         with:
-          name: media3-decoder-av1
+          name: media3-decoder-av1-local
           path: libraries/decoder_av1/build/outputs/aar/*-release.aar
