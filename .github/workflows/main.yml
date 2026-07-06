@@ -1,4 +1,4 @@
-name: Build Media3 Decoder AV1 Inspect
+name: Build Media3 Decoder AV1 Force Native
 on: [workflow_dispatch]
 
 jobs:
@@ -25,17 +25,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build nasm
 
-      - name: Inspect AV1 Directory Structure
+      - name: Find and Run AV1 Fetch Script
         run: |
-          echo "=== LISTE COMPLÈTE DES FICHIERS DANS DECODER_AV1 ==="
-          ls -R libraries/decoder_av1/
+          echo "=== Recherche du script fetch_dav1d.sh ==="
+          SCRIPT_PATH=$(find . -name "fetch_dav1d.sh" | head -n 1)
+          if [ -z "$SCRIPT_PATH" ]; then
+            echo "Erreur : Impossible de trouver fetch_dav1d.sh dans le dépôt !"
+            exit 1
+          fi
+          echo "Script trouvé ici : $SCRIPT_PATH"
+          SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
+          cd "$SCRIPT_DIR"
+          chmod +x fetch_dav1d.sh
+          ./fetch_dav1d.sh
 
-      - name: Compile AAR
-        run: ./gradlew :lib-decoder-av1:assembleRelease
+      - name: Compile Real AAR (Forcing Native Compilation)
+        run: ./gradlew :lib-decoder-av1:assembleRelease -PbuildNativeLibraries=true
 
-      - name: Upload Finished AAR
+      - name: Upload Finished Real AAR
         uses: actions/upload-artifact@v4
         with:
-          name: media3-decoder-av1-inspect
+          name: media3-decoder-av1-final
           path: |
             **/*.aar
