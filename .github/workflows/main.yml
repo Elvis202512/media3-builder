@@ -6,52 +6,50 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Checkout Media3 (v1.5.1)
+      - name: 1. Code source de Media3 (v1.5.1)
         uses: actions/checkout@v4
         with:
           repository: androidx/media
           ref: '1.5.1'
           path: media
 
-      - name: 2. Checkout cpu_features (Requis par Google)
-        uses: actions/checkout@v4
-        with:
-          repository: google/cpu_features
-          ref: 'v0.9.0'
-          path: media/libraries/decoder_av1/src/main/jni/cpu_features
+      - name: 2. Téléchargement des dépendances natives (Fix Google Source)
+        run: |
+          JNI_DIR="media/libraries/decoder_av1/src/main/jni"
+          mkdir -p "$JNI_DIR"
+          cd "$JNI_DIR"
+          
+          # 1. Télécharger cpu_features depuis GitHub
+          git clone --depth 1 -b v0.9.0 https://github.com/google/cpu_features.git cpu_features
+          
+          # 2. Télécharger libgav1 depuis le VRAI serveur de Google
+          git clone --depth 1 https://chromium.googlesource.com/codecs/libgav1 libgav1
+          
+          # 3. Télécharger abseil-cpp et le mettre au bon endroit dans libgav1
+          mkdir -p libgav1/third_party
+          git clone --depth 1 -b 20230802.1 https://github.com/abseil/abseil-cpp.git libgav1/third_party/abseil-cpp
 
-      - name: 3. Checkout libgav1 (Le décodeur officiel)
-        uses: actions/checkout@v4
-        with:
-          repository: google/libgav1
-          ref: 'v0.19.0'
-          path: media/libraries/decoder_av1/src/main/jni/libgav1
-
-      - name: 4. Checkout abseil-cpp (Requis par libgav1)
-        uses: actions/checkout@v4
-        with:
-          repository: abseil/abseil-cpp
-          ref: '20230802.1'
-          path: media/libraries/decoder_av1/src/main/jni/libgav1/third_party/abseil-cpp
-
-      - name: 5. Configuration de Java
+      - name: 3. Configuration de Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: 6. Installation des outils de compilation native
+      - name: 4. Installation de CMake et Ninja
         run: sudo apt-get update && sudo apt-get install -y cmake ninja-build
 
-      - name: 7. Rendre le script Gradle exécutable
+      - name: 5. Configuration de l'environnement Android
+        uses: android-actions/setup-android@v3
+
+      - name: 6. Rendre le script Gradle exécutable
         run: chmod +x media/gradlew
 
-      - name: 8. Compilation automatique de toutes les architectures
+      - name: 7. Compilation automatique (Fat AAR Multi-ABI)
         run: |
           cd media
           ./gradlew :lib-decoder-av1:assembleRelease
 
-      - name: 9. Récupérer le Fat AAR complet
+      - name: 8. Récupérer le Fat AAR complet
         uses: actions/upload-artifact@v4
         with:
           name: decoder-av1-official-fat
