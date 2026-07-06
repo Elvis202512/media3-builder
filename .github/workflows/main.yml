@@ -1,4 +1,4 @@
-name: Build Media3 Decoder AV1 Real
+name: Build Media3 Decoder AV1 Inspect
 on: [workflow_dispatch]
 
 jobs:
@@ -25,18 +25,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build nasm
 
-      - name: Fetch AV1 Native Sources (dav1d)
+      - name: Inspect AV1 Directory Structure
         run: |
-          cd libraries/decoder_av1/src/main/jni
-          chmod +x fetch_dav1d.sh
-          ./fetch_dav1d.sh
+          echo "=== LISTE COMPLÈTE DES FICHIERS DANS DECODER_AV1 ==="
+          ls -R libraries/decoder_av1/
 
-      - name: Compile Real AAR with Native Libs
+      - name: Compile AAR
         run: ./gradlew :lib-decoder-av1:assembleRelease
 
-      - name: Upload Finished Real AAR
+      - name: Upload Finished AAR
         uses: actions/upload-artifact@v4
         with:
-          name: media3-decoder-av1-real
+          name: media3-decoder-av1-inspect
           path: |
             **/*.aar
