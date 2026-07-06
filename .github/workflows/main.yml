@@ -1,4 +1,4 @@
-name: Build Media3 Decoder AV1
+name: Build Media3 Decoder AV1 Real
 on: [workflow_dispatch]
 
 jobs:
@@ -9,7 +9,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: 'androidx/media'
-          ref: '1.5.1' # Garde bien '1.5.1' uniquement pour éviter le crash git
+          ref: '1.5.1'
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
@@ -25,19 +25,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build nasm
 
-      - name: Compile AAR
+      - name: Fetch AV1 Native Sources (dav1d)
+        run: |
+          cd libraries/decoder_av1/src/main/jni
+          chmod +x fetch_dav1d.sh
+          ./fetch_dav1d.sh
+
+      - name: Compile Real AAR with Native Libs
         run: ./gradlew :lib-decoder-av1:assembleRelease
 
-      - name: Debug - Localiser le fichier AAR
-        run: |
-          echo "=== RECHERCHE DU FICHIER AAR ==="
-          find . -name "*.aar"
-          echo "=== STRUCTURE DU DOSSIER DE COMPILATION ==="
-          ls -R libraries/decoder_av1/build/outputs/ || echo "Dossier outputs introuvable"
-
-      - name: Upload Finished AAR
+      - name: Upload Finished Real AAR
         uses: actions/upload-artifact@v4
         with:
-          name: media3-decoder-av1-local
+          name: media3-decoder-av1-real
           path: |
             **/*.aar
