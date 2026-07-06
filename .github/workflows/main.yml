@@ -1,5 +1,5 @@
 name: Build Media3 Decoder AV1
-on: [workflow_dispatch] # Permet de lancer le build d'un simple clic
+on: [workflow_dispatch]
 
 jobs:
   build:
@@ -9,7 +9,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: 'androidx/media'
-          ref: '1.5.1'
+          ref: '1.5.1' # Garde bien '1.5.1' uniquement pour éviter le crash git
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
@@ -28,8 +28,16 @@ jobs:
       - name: Compile AAR
         run: ./gradlew :lib-decoder-av1:assembleRelease
 
+      - name: Debug - Localiser le fichier AAR
+        run: |
+          echo "=== RECHERCHE DU FICHIER AAR ==="
+          find . -name "*.aar"
+          echo "=== STRUCTURE DU DOSSIER DE COMPILATION ==="
+          ls -R libraries/decoder_av1/build/outputs/ || echo "Dossier outputs introuvable"
+
       - name: Upload Finished AAR
         uses: actions/upload-artifact@v4
         with:
           name: media3-decoder-av1-local
-          path: "**/build/outputs/aar/*.aar"
+          path: |
+            **/*.aar
