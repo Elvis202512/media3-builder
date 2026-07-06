@@ -32,4 +32,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: media3-decoder-av1-local
-          path: libraries/decoder_av1/build/outputs/aar/*-release.aar
+          path: "**/build/outputs/aar/*.aar"
