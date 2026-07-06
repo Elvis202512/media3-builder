@@ -1,9 +1,9 @@
-name: Build Media3 Decoder AV1 - Strategy 1 (Old Runner)
+name: Build Media3 Decoder AV1 Real
 on: [workflow_dispatch]
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Media3 Source
         uses: actions/checkout@v4
@@ -27,21 +27,34 @@ jobs:
 
       - name: Clone Google libgav1 & Abseil Dependencies
         run: |
+          echo "=== 1. Clonage de libgav1 ==="
           git clone --depth 1 https://chromium.googlesource.com/codecs/libgav1 libraries/decoder_av1/src/main/jni/libgav1
+          
+          echo "=== 2. Clonage d'Abseil ==="
           mkdir -p libraries/decoder_av1/src/main/jni/libgav1/third_party
           git clone --depth 1 https://github.com/abseil/abseil-cpp.git libraries/decoder_av1/src/main/jni/libgav1/third_party/abseil-cpp
 
-      - name: Inject C++17 Standard
+      - name: Force Lock C++17 Standard (Override Gradle)
         run: |
-          sed -i '1i set(CMAKE_CXX_STANDARD 17)\nset(CMAKE_CXX_STANDARD_REQUIRED ON)' libraries/decoder_av1/src/main/jni/CMakeLists.txt
-          sed -i '1i set(CMAKE_CXX_STANDARD 17)\nset(CMAKE_CXX_STANDARD_REQUIRED ON)' libraries/decoder_av1/src/main/jni/libgav1/CMakeLists.txt
+          echo "=== Forçage absolu du C++17 dans le cache CMake ==="
+          # Ces lignes écrasent définitivement les flags par défaut imposés par Gradle
+          sed -i '1i set(CMAKE_CXX_STANDARD 17 CACHE STRING "" FORCE)\nset(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "" FORCE)' libraries/decoder_av1/src/main/jni/CMakeLists.txt
+          sed -i '1i set(CMAKE_CXX_STANDARD 17 CACHE STRING "" FORCE)\nset(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "" FORCE)' libraries/decoder_av1/src/main/jni/libgav1/CMakeLists.txt
 
-      - name: Compile Real AAR
+      - name: Compile Real AAR with Native Libs
         run: ./gradlew :lib-decoder-av1:assembleRelease --info
 
       - name: Upload Finished Real AAR
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: media3-decoder-gav1-v1
-          path: "**/*.aar"
+          name: media3-decoder-gav1-1.5.1
+          path: |
+            **/*.aar
+
+      - name: Print All Possible Error Logs on Failure
+        if: failure()
+        run: |
+          echo "=== [DIAGNOSTIC] EXTRACTION COMPLÈTE DES RAPPORTS DE CONFIGURATION ==="
+          find libraries/decoder_av1/ -name "CMakeConfigureLog.yaml" -exec cat {} \; || true
+          find libraries/decoder_av1/ -name "CMakeError.log" -exec cat {} \; || true
