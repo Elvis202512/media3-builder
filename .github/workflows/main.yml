@@ -20,6 +20,11 @@ jobs:
       - name: Setup Android SDK & NDK
         uses: android-actions/setup-android@v3
 
+      - name: Nuke Buggy CMake 3.31.5
+        run: |
+          echo "=== Suppression forcée de CMake 3.31.5 pour éviter le conflit ==="
+          sudo rm -rf /usr/local/lib/android/sdk/cmake/3.31.5
+
       - name: Install Compilers (Ninja, nasm)
         run: |
           sudo apt-get update
@@ -34,17 +39,14 @@ jobs:
           mkdir -p libraries/decoder_av1/src/main/jni/libgav1/third_party
           git clone --depth 1 https://github.com/abseil/abseil-cpp.git libraries/decoder_av1/src/main/jni/libgav1/third_party/abseil-cpp
 
-      - name: Inject C++17 Standard & Force Stable CMake
+      - name: Inject C++17 Standard for Compatibility
         run: |
-          echo "=== 1. Modernisation du standard C++ pour CMake ==="
+          echo "=== Modernisation du standard C++ pour CMake ==="
           sed -i '1i set(CMAKE_CXX_STANDARD 17)\nset(CMAKE_CXX_STANDARD_REQUIRED ON)' libraries/decoder_av1/src/main/jni/CMakeLists.txt
           sed -i '1i set(CMAKE_CXX_STANDARD 17)\nset(CMAKE_CXX_STANDARD_REQUIRED ON)' libraries/decoder_av1/src/main/jni/libgav1/CMakeLists.txt
-          
-          echo "=== 2. Forçage de la version de CMake dans gradle.properties ==="
-          echo "android.externalNativeBuild.cmake.version=3.22.1" >> gradle.properties
 
       - name: Compile Real AAR with Native Libs
-        run: ./gradlew :lib-decoder-av1:assembleRelease -Pandroid.externalNativeBuild.cmake.version=3.22.1 --info
+        run: ./gradlew :lib-decoder-av1:assembleRelease --info
 
       - name: Upload Finished Real AAR
         if: success()
