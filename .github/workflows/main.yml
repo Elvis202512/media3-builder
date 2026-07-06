@@ -1,5 +1,7 @@
 name: Build Media3 Decoder AV1
-on: [workflow_dispatch] # Permet de lancer le build d'un simple clic
+
+on:
+  workflow_dispatch:
 
 jobs:
   build:
@@ -9,7 +11,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: 'androidx/media'
-          ref: '1.5.1' # Version corrigée ici !
+          ref: '1.5.1'  # ou une version plus récente (1.9+ recommandé pour dav1d)
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
@@ -19,17 +21,41 @@ jobs:
 
       - name: Setup Android SDK & NDK
         uses: android-actions/setup-android@v3
+        with:
+          # Optionnel : forcer une version récente du NDK
+          ndk-version: 'r27'  # ou r26b / r27b selon la doc
 
-      - name: Run Google Fetch Script
+      - name: Install build dependencies (Meson, Ninja, nasm)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y meson ninja-build nasm
+
+      - name: Prepare AV1 decoder (fetch + build dav1d)
         run: |
           cd libraries/decoder_av1/src/main/jni
-          ./fetch_dav1d.sh
+
+          # Clone cpu_features
+          git clone https://github.com/google/cpu_features
+
+          # Clone dav1d
+          git clone https://code.videolan.org/videolan/dav1d.git
+
+          # Variables
+          AV1_MODULE_PATH="$(pwd)/../.."  # ajuste si besoin
+          NDK_PATH=$ANDROID_NDK_ROOT
+          HOST_PLATFORM="linux-x86_64"
+
+          echo "NDK_PATH=$NDK_PATH"
+          echo "HOST_PLATFORM=$HOST_PLATFORM"
+
+          # Build dav1d
+          ./build_dav1d.sh "$AV1_MODULE_PATH" "$NDK_PATH" "$HOST_PLATFORM"
 
       - name: Compile AAR
-        run: ./gradlew :libraries:decoder_av1:assembleRelease
+        run: ./gradlew :libraries:decoder_av1:assembleRelease --no-daemon --stacktrace
 
       - name: Upload Finished AAR
         uses: actions/upload-artifact@v4
         with:
-          name: media3-decoder-av1-local
+          name: media3-decoder-av1
           path: libraries/decoder_av1/build/outputs/aar/*-release.aar
