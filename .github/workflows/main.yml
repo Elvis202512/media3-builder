@@ -1,0 +1,98 @@
+name: Build Fat Multi-ABI AV1 Decoder AAR
+on: [workflow_dispatch]
+
+jobs:
+  build-all:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Media3 Source
+        uses: actions/checkout@v4
+        with:
+          repository: 'androidx/media'
+          ref: '1.5.1'
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'zulu'
+
+      - name: Setup Android SDK & NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Native Build Tools (Meson, Ninja, NASM)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build nasm python3-pip
+          pip3 install --user meson
+
+      - name: Compile dav1d for All 4 ABIs & Inject into jniLibs
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          NDK_PATH="/usr/local/lib/android/sdk/ndk/25.1.8937393"
+          ANDROID_API=21
+          
+          # Création du dossier jniLibs réglementaire d'Android
+          JNI_LIBS_DIR="libraries/decoder_av1/src/main/jniLibs"
+          mkdir -p "$JNI_LIBS_DIR"
+          
+          git clone https://code.videolan.org/videolan/dav1d -b 1.5.3 dav1d_source
+          
+          ARCHS=("arm64" "arm" "x86" "x86_64")
+          for ARCH in "${ARCHS[@]}"; do
+            case "${ARCH}" in
+              'arm')     ABI='armeabi-v7a'; CPU='arm';     TRIPLET='armv7a-linux-androideabi' ;;
+              'arm64')   ABI='arm64-v8a';   CPU='aarch64'; TRIPLET='aarch64-linux-android' ;;
+              'x86')     ABI='x86';         CPU='x86';     TRIPLET='i686-linux-android' ;;
+              'x86_64')  ABI='x86_64';      CPU='x86_64';  TRIPLET='x86_64-linux-android' ;;
+            esac
+            
+            CROSS_PREFIX="${NDK_PATH}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+            
+            # Génération du fichier cross-compilation pour Meson
+            cat <<EOF > "cross_${ABI}.txt"
+[binaries]
+name = 'android'
+c     = '${CROSS_PREFIX}/${TRIPLET}${ANDROID_API}-clang'
+cpp   = '${CROSS_PREFIX}/${TRIPLET}${ANDROID_API}-clang++'
+ar    = '${CROSS_PREFIX}/llvm-ar'
+ld    = '${CROSS_PREFIX}/${TRIPLET}${ANDROID_API}-clang++'
+strip = '${CROSS_PREFIX}/${TRIPLET}-strip'
+[properties]
+needs_exe_wrapper = true
+c_link_args = ['-Wl,-z,max-page-size=16384']
+cpp_link_args = ['-Wl,-z,max-page-size=16384']
+[host_machine]
+system = 'linux'
+cpu_family = '${CPU}'
+cpu = '${CPU}'
+endian = 'little'
+EOF
+
+            cd dav1d_source
+            rm -rf "../build-${ABI}"
+            meson setup "../build-${ABI}" --buildtype release --cross-file "../cross_${ABI}.txt" -Denable_tools=false -Denable_tests=false
+            ninja -C "../build-${ABI}"
+            
+            # Application de ton fix SONAME (indispensable sur Android)
+            sed -i 's:libdav1d\.so\.[0-9]:libdav1d\.so\x0\x0:' $(readlink -f "../build-${ABI}/src/libdav1d.so")
+            
+            # On range le .so directement au bon endroit pour le packaging Gradle
+            mkdir -p "../${JNI_LIBS_DIR}/${ABI}"
+            cp "../build-${ABI}/src/libdav1d.so" "../${JNI_LIBS_DIR}/${ABI}/libdav1d.so"
+            cd ..
+          done
+
+      - name: Disable External CMake in decoder_av1 (Avoid Gradle Crashing)
+        run: |
+          # On commente la section externalNativeBuild pour empêcher Gradle de chercher un CMakeLists
+          sed -i '/externalNativeBuild {/,/}/d' libraries/decoder_av1/build.gradle
+
+      - name: Build Fat AAR with Gradle
+        run: ./gradlew :lib-decoder-av1:assembleRelease --info
+
+      - name: Upload Multi-ABI AAR Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: media3-decoder-dav1-fat-aar
+          path: libraries/decoder_av1/build/outputs/aar/*.aar
