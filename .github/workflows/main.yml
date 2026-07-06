@@ -13,14 +13,13 @@ jobs:
           ref: '1.5.1'
           path: media
 
-      - name: 2. Téléchargement de libvpx (Fix Google Source)
+      - name: 2. Téléchargement de libvpx (Version stable)
         run: |
           JNI_DIR="media/libraries/decoder_vp9/src/main/jni"
           mkdir -p "$JNI_DIR"
           cd "$JNI_DIR"
-          
-          # Télécharger libvpx depuis le serveur officiel de Google/WebM
-          git clone --depth 1 https://chromium.googlesource.com/webm/libvpx libvpx
+          # On cible la version v1.14.1 pour une compatibilité parfaite avec Media3 1.5
+          git clone --depth 1 -b v1.14.1 https://chromium.googlesource.com/webm/libvpx libvpx
 
       - name: 3. Configuration de Java
         uses: actions/setup-java@v4
@@ -28,21 +27,34 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: 4. Installation de CMake et Ninja
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build
+      - name: 4. Installation des outils requis (Yasm/Nasm obligatoires pour VP9)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build yasm nasm
 
       - name: 5. Configuration de l'environnement Android
         uses: android-actions/setup-android@v3
 
-      - name: 6. Rendre le script Gradle exécutable
+      - name: 6. Génération magique de la configuration multi-architecture
+        run: |
+          # On récupère automatiquement le NDK installé par GitHub Actions
+          export ANDROID_NDK_HOME=$(ls -d /usr/local/lib/android/sdk/ndk/* | tail -1)
+          echo "NDK détecté : $ANDROID_NDK_HOME"
+          
+          cd media/libraries/decoder_vp9/src/main/jni
+          chmod +x generate_vpx_config.sh
+          # Ce script va configurer libvpx pour arm64-v8a, armeabi-v7a, x86 et x86_64
+          ./generate_vpx_config.sh
+
+      - name: 7. Rendre le script Gradle exécutable
         run: chmod +x media/gradlew
 
-      - name: 7. Compilation automatique (Fat AAR Multi-ABI VP9)
+      - name: 8. Compilation automatique (Fat AAR Multi-ABI VP9)
         run: |
           cd media
           ./gradlew :lib-decoder-vp9:assembleRelease
 
-      - name: 8. Récupérer le Fat AAR complet
+      - name: 9. Récupérer le Fat AAR complet
         uses: actions/upload-artifact@v4
         with:
           name: decoder-vp9-official-fat
