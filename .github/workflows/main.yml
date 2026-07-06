@@ -25,6 +25,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build nasm
 
+      - name: Force Install Stable CMake 3.22 & Nuke Buggy Versions
+        run: |
+          echo "=== 1. Installation de CMake 3.22.1 (la version recommandée par Google) ==="
+          ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1"
+          
+          echo "=== 2. Verrouillage de la version dans les propriétés Gradle ==="
+          echo "cmake.dir=${ANDROID_HOME}/cmake/3.22.1" >> local.properties
+          
+          echo "=== 3. Nettoyage radical des CMake pré-installés défectueux ==="
+          sudo rm -rf /usr/local/lib/android/sdk/cmake/3.31.5
+          sudo rm -rf /usr/local/lib/android/sdk/cmake/4.1.2
+
       - name: Clone Google libgav1 & Abseil Dependencies
         run: |
           echo "=== 1. Clonage de libgav1 ==="
@@ -37,7 +49,6 @@ jobs:
       - name: Force Lock C++17 Standard (Override Gradle)
         run: |
           echo "=== Forçage absolu du C++17 dans le cache CMake ==="
-          # Ces lignes écrasent définitivement les flags par défaut imposés par Gradle
           sed -i '1i set(CMAKE_CXX_STANDARD 17 CACHE STRING "" FORCE)\nset(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "" FORCE)' libraries/decoder_av1/src/main/jni/CMakeLists.txt
           sed -i '1i set(CMAKE_CXX_STANDARD 17 CACHE STRING "" FORCE)\nset(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "" FORCE)' libraries/decoder_av1/src/main/jni/libgav1/CMakeLists.txt
 
