@@ -1,17 +1,21 @@
 name: Build Media3 Decoder AV1
-on: [workflow_dispatch] # Permet de lancer le build d'un simple clic
+
+on:
+  workflow_dispatch:  # Lancer manuellement
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Media3 Source
         uses: actions/checkout@v4
         with:
           repository: 'androidx/media'
-          ref: '1.5.1' # Version corrigée ici !
+          ref: '1.5.1'
+          fetch-depth: 0
 
-      - name: Setup Java JDK
+      - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
@@ -19,17 +23,28 @@ jobs:
 
       - name: Setup Android SDK & NDK
         uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '14.0'
 
-      - name: Run Google Fetch Script
+      - name: Accept Android licenses
+        run: |
+          yes | sdkmanager --licenses
+
+      - name: Fetch dav1d (AV1 decoder)
         run: |
           cd libraries/decoder_av1/src/main/jni
+          chmod +x ./fetch_dav1d.sh
           ./fetch_dav1d.sh
 
-      - name: Compile AAR
-        run: ./gradlew :libraries:decoder_av1:assembleRelease
+      - name: Build Media3 AV1 Decoder AAR
+        run: |
+          ./gradlew :libraries:decoder_av1:assembleRelease \
+            --no-daemon \
+            --parallel
 
-      - name: Upload Finished AAR
+      - name: Upload AAR Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: media3-decoder-av1-local
+          name: media3-decoder-av1-1.5.1
           path: libraries/decoder_av1/build/outputs/aar/*-release.aar
+          retention-days: 30
