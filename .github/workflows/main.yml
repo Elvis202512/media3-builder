@@ -32,7 +32,6 @@ jobs:
           NDK_PATH="/usr/local/lib/android/sdk/ndk/25.1.8937393"
           ANDROID_API=21
           
-          # Création du dossier jniLibs réglementaire d'Android
           JNI_LIBS_DIR="libraries/decoder_av1/src/main/jniLibs"
           mkdir -p "$JNI_LIBS_DIR"
           
@@ -49,7 +48,6 @@ jobs:
             
             CROSS_PREFIX="${NDK_PATH}/toolchains/llvm/prebuilt/linux-x86_64/bin"
             
-            # Génération du fichier cross-compilation pour Meson
             cat <<EOF > "cross_${ABI}.txt"
 [binaries]
 name = 'android'
@@ -74,19 +72,24 @@ EOF
             meson setup "../build-${ABI}" --buildtype release --cross-file "../cross_${ABI}.txt" -Denable_tools=false -Denable_tests=false
             ninja -C "../build-${ABI}"
             
-            # Application de ton fix SONAME (indispensable sur Android)
             sed -i 's:libdav1d\.so\.[0-9]:libdav1d\.so\x0\x0:' $(readlink -f "../build-${ABI}/src/libdav1d.so")
             
-            # On range le .so directement au bon endroit pour le packaging Gradle
             mkdir -p "../${JNI_LIBS_DIR}/${ABI}"
             cp "../build-${ABI}/src/libdav1d.so" "../${JNI_LIBS_DIR}/${ABI}/libdav1d.so"
             cd ..
           done
 
-      - name: Disable External CMake in decoder_av1 (Avoid Gradle Crashing)
+      - name: Disable External CMake Safely (Avoid Gradle Crashing)
         run: |
-          # On commente la section externalNativeBuild pour empêcher Gradle de chercher un CMakeLists
-          sed -i '/externalNativeBuild {/,/}/d' libraries/decoder_av1/build.gradle
+          python3 -c "
+          import re
+          with open('libraries/decoder_av1/build.gradle', 'r') as f:
+              content = f.read()
+          # Supprime proprement le bloc externalNativeBuild imbriqué sans casser la syntaxe
+          content = re.sub(r'externalNativeBuild\s*\{.*?\}\s*\}', '', content, flags=re.DOTALL)
+          with open('libraries/decoder_av1/build.gradle', 'w') as f:
+              f.write(content)
+          "
 
       - name: Build Fat AAR with Gradle
         run: ./gradlew :lib-decoder-av1:assembleRelease --info
