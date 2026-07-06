@@ -30,12 +30,12 @@ jobs:
           echo "=== 1. Clonage du moteur principal libgav1 ==="
           git clone https://chromium.googlesource.com/codecs/libgav1 libraries/decoder_av1/src/main/jni/libgav1
           
-          echo "=== 2. Clonage de la dépendance obligatoire Abseil ==="
+          echo "=== 2. Clonage de la dépendance Abseil ==="
           mkdir -p libraries/decoder_av1/src/main/jni/libgav1/third_party
           git clone https://github.com/abseil/abseil-cpp.git libraries/decoder_av1/src/main/jni/libgav1/third_party/abseil-cpp
 
-      - name: Compile Real AAR with Native Libs
-        run: ./gradlew :lib-decoder-av1:assembleRelease
+      - name: Compile Real AAR with Native Libs (Verbose Info)
+        run: ./gradlew :lib-decoder-av1:assembleRelease --info
 
       - name: Upload Finished Real AAR
         if: success()
@@ -45,9 +45,9 @@ jobs:
           path: |
             **/*.aar
 
-      - name: Print CMake Logs on Failure
+      - name: Print Detailed CMake Logs on Failure
         if: failure()
         run: |
-          echo "=== [DIAGNOSTIC] AFFICHAGE DES ERREURS DE COMPILATION C++ ==="
-          find libraries/decoder_av1/.cxx -name "CMakeError.log" -exec cat {} \; || true
+          echo "=== [DIAGNOSTIC] AFFICHAGE DU LOG DE CONFIGURATION CXX ==="
+          find libraries/decoder_av1/.cxx -name "CMakeConfigureLog.yaml" -exec head -n 150 {} \; || true
           find libraries/decoder_av1/.cxx -name "cmake_output.txt" -exec cat {} \; || true
