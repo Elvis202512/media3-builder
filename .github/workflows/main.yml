@@ -1,8 +1,8 @@
-name: Diagnostic Media3 AV1
+name: Build Media3 Decoder AV1 Real
 on: [workflow_dispatch]
 
 jobs:
-  explore:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Media3 Source
@@ -11,18 +11,31 @@ jobs:
           repository: 'androidx/media'
           ref: '1.5.1'
 
-      - name: Structure du module AV1
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'zulu'
+
+      - name: Setup Android SDK & NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Compilers (Ninja, nasm)
         run: |
-          echo "=== 1. LISTE DE TOUS LES FICHIERS DE L'EXTENSION ==="
-          find libraries/decoder_av1 -type f
-          
-      - name: Inspection du script de build Gradle
+          sudo apt-get update
+          sudo apt-get install -y ninja-build nasm
+
+      - name: Clone Official Google libgav1 Source
         run: |
-          echo "=== 2. CONTENU DU CONFIGURATION GRADLE ==="
-          if [ -f "libraries/decoder_av1/build.gradle" ]; then
-            cat libraries/decoder_av1/build.gradle
-          elif [ -f "libraries/decoder_av1/build.gradle.kts" ]; then
-            cat libraries/decoder_av1/build.gradle.kts
-          else
-            echo "Fichier de build introuvable !"
-          fi
+          echo "=== Clonage du moteur libgav1 ==="
+          git clone https://chromium.googlesource.com/codecs/libgav1 libraries/decoder_av1/src/main/jni/libgav1
+
+      - name: Compile Real AAR with Native Libs
+        run: ./gradlew :lib-decoder-av1:assembleRelease
+
+      - name: Upload Finished Real AAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: media3-decoder-gav1-real
+          path: |
+            **/*.aar
