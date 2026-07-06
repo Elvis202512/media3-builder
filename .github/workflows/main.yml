@@ -30,20 +30,21 @@ jobs:
           echo "=== 1. Clonage de libgav1 ==="
           git clone --depth 1 https://chromium.googlesource.com/codecs/libgav1 libraries/decoder_av1/src/main/jni/libgav1
           
-          echo "=== 2. Clonage d'Abseil (Optimisé) ==="
+          echo "=== 2. Clonage d'Abseil ==="
           mkdir -p libraries/decoder_av1/src/main/jni/libgav1/third_party
           git clone --depth 1 https://github.com/abseil/abseil-cpp.git libraries/decoder_av1/src/main/jni/libgav1/third_party/abseil-cpp
 
-      - name: Inject C++17 Standard for Compatibility
+      - name: Inject C++17 Standard & Force Stable CMake
         run: |
-          echo "=== Modernisation du standard C++ pour les configurations CMake ==="
-          # Injection dans le CMakeLists principal du JNI
+          echo "=== 1. Modernisation du standard C++ pour CMake ==="
           sed -i '1i set(CMAKE_CXX_STANDARD 17)\nset(CMAKE_CXX_STANDARD_REQUIRED ON)' libraries/decoder_av1/src/main/jni/CMakeLists.txt
-          # Injection dans le CMakeLists interne de libgav1
           sed -i '1i set(CMAKE_CXX_STANDARD 17)\nset(CMAKE_CXX_STANDARD_REQUIRED ON)' libraries/decoder_av1/src/main/jni/libgav1/CMakeLists.txt
+          
+          echo "=== 2. Forçage de la version de CMake dans gradle.properties ==="
+          echo "android.externalNativeBuild.cmake.version=3.22.1" >> gradle.properties
 
       - name: Compile Real AAR with Native Libs
-        run: ./gradlew :lib-decoder-av1:assembleRelease --info
+        run: ./gradlew :lib-decoder-av1:assembleRelease -Pandroid.externalNativeBuild.cmake.version=3.22.1 --info
 
       - name: Upload Finished Real AAR
         if: success()
