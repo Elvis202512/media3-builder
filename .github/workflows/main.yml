@@ -1,4 +1,4 @@
-name: Build Media3 AV1 (libgav1) Fat AAR
+name: Build Media3 VP9 (libvpx) Fat AAR
 on:
   workflow_dispatch:
 
@@ -13,21 +13,14 @@ jobs:
           ref: '1.5.1'
           path: media
 
-      - name: 2. Téléchargement des dépendances natives (Fix Google Source)
+      - name: 2. Téléchargement de libvpx (Fix Google Source)
         run: |
-          JNI_DIR="media/libraries/decoder_av1/src/main/jni"
+          JNI_DIR="media/libraries/decoder_vp9/src/main/jni"
           mkdir -p "$JNI_DIR"
           cd "$JNI_DIR"
           
-          # 1. Télécharger cpu_features depuis GitHub
-          git clone --depth 1 -b v0.9.0 https://github.com/google/cpu_features.git cpu_features
-          
-          # 2. Télécharger libgav1 depuis le VRAI serveur de Google
-          git clone --depth 1 https://chromium.googlesource.com/codecs/libgav1 libgav1
-          
-          # 3. Télécharger abseil-cpp et le mettre au bon endroit dans libgav1
-          mkdir -p libgav1/third_party
-          git clone --depth 1 -b 20230802.1 https://github.com/abseil/abseil-cpp.git libgav1/third_party/abseil-cpp
+          # Télécharger libvpx depuis le serveur officiel de Google/WebM
+          git clone --depth 1 https://chromium.googlesource.com/webm/libvpx libvpx
 
       - name: 3. Configuration de Java
         uses: actions/setup-java@v4
@@ -44,13 +37,13 @@ jobs:
       - name: 6. Rendre le script Gradle exécutable
         run: chmod +x media/gradlew
 
-      - name: 7. Compilation automatique (Fat AAR Multi-ABI)
+      - name: 7. Compilation automatique (Fat AAR Multi-ABI VP9)
         run: |
           cd media
-          ./gradlew :lib-decoder-av1:assembleRelease
+          ./gradlew :lib-decoder-vp9:assembleRelease
 
       - name: 8. Récupérer le Fat AAR complet
         uses: actions/upload-artifact@v4
         with:
-          name: decoder-av1-official-fat
-          path: media/libraries/decoder_av1/**/outputs/aar/*.aar
+          name: decoder-vp9-official-fat
+          path: media/libraries/decoder_vp9/**/outputs/aar/*.aar
