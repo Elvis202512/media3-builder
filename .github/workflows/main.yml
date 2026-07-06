@@ -1,71 +1,129 @@
-name: Build Media3 Decoder AV1 Real
+name: Build Native dav1d Decoder
 on: [workflow_dispatch]
 
 jobs:
-  build:
+  build-dav1d:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Media3 Source
+      - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          repository: 'androidx/media'
-          ref: '1.5.1'
-
-      - name: Setup Java JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'zulu'
 
       - name: Setup Android SDK & NDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Compilers (Ninja, nasm)
+      - name: Install Build Tools (Meson, Ninja, NASM)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build nasm
+          sudo apt-get install -y ninja-build nasm python3-pip python3-setuptools
+          # Installation propre de Meson
+          pip3 install --user meson
 
-      - name: Force Install Stable CMake 3.22 & Nuke Buggy Versions
+      - name: Run dav1d Cross-Compilation Script
         run: |
-          echo "=== 1. Installation de CMake 3.22.1 (la version recommandée par Google) ==="
-          ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1"
+          # Ajout de Meson au PATH local de GitHub Actions
+          export PATH="$HOME/.local/bin:$PATH"
           
-          echo "=== 2. Verrouillage de la version dans les propriétés Gradle ==="
-          echo "cmake.dir=${ANDROID_HOME}/cmake/3.22.1" >> local.properties
+          # Utilisation de la version stable de l'NDK présente sur le runner
+          NDK_PATH="/usr/local/lib/android/sdk/ndk/25.1.8937393"
+          ANDROID_API=21
           
-          echo "=== 3. Nettoyage radical des CMake pré-installés défectueux ==="
-          sudo rm -rf /usr/local/lib/android/sdk/cmake/3.31.5
-          sudo rm -rf /usr/local/lib/android/sdk/cmake/4.1.2
-
-      - name: Clone Google libgav1 & Abseil Dependencies
-        run: |
-          echo "=== 1. Clonage de libgav1 ==="
-          git clone --depth 1 https://chromium.googlesource.com/codecs/libgav1 libraries/decoder_av1/src/main/jni/libgav1
+          mkdir -p prebuilt/dav1d
+          PREBUILT_DIR=$(readlink -f prebuilt/dav1d)
           
-          echo "=== 2. Clonage d'Abseil ==="
-          mkdir -p libraries/decoder_av1/src/main/jni/libgav1/third_party
-          git clone --depth 1 https://github.com/abseil/abseil-cpp.git libraries/decoder_av1/src/main/jni/libgav1/third_party/abseil-cpp
+          # 1. Clonage propre du dépôt officiel de VideoLAN dav1d
+          if [ ! -d dav1d ]; then
+            git -c http.sslVerify=false clone https://code.videolan.org/videolan/dav1d -b 1.5.3
+          fi
+          
+          # 2. Boucle automatique sur toutes les architectures Android requises
+          ARCHS=("arm64" "arm" "x86" "x86_64")
+          
+          for ARCH in "${ARCHS[@]}"; do
+            echo "========================================="
+            echo "   COMPILATION DE L'ARCHITECTURE : $ARCH"
+            echo "========================================="
+            
+            case "${ARCH}" in
+              'arm')
+                ARCH_TRIPLET='arm-linux-androideabi'
+                ARCH_TRIPLET_VARIANT='armv7a-linux-androideabi'
+                ABI='armeabi-v7a'
+                CPU_FAMILY='arm'
+                ;;
+              'arm64')
+                ARCH_TRIPLET='aarch64-linux-android'
+                ARCH_TRIPLET_VARIANT=$ARCH_TRIPLET
+                ABI='arm64-v8a'
+                CPU_FAMILY='aarch64'
+                ;;
+              'x86')
+                ARCH_TRIPLET='i686-linux-android'
+                ARCH_TRIPLET_VARIANT=$ARCH_TRIPLET
+                ABI='x86'
+                CPU_FAMILY='x86'
+                ;;
+              'x86_64')
+                ARCH_TRIPLET='x86_64-linux-android'
+                ARCH_TRIPLET_VARIANT=$ARCH_TRIPLET
+                ABI='x86_64'
+                CPU_FAMILY='x86_64'
+                ;;
+            esac
+            
+            CROSS_PREFIX="${NDK_PATH}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+            dir_name="build-${ABI}"
+            user_config="android_cross_${ABI}.txt"
+            
+            # Génération dynamique du fichier de cross-compilation Meson
+            cat <<EOF > $user_config
+[binaries]
+name = 'android'
+c     = '${CROSS_PREFIX}/${ARCH_TRIPLET_VARIANT}${ANDROID_API}-clang'
+cpp   = '${CROSS_PREFIX}/${ARCH_TRIPLET_VARIANT}${ANDROID_API}-clang++'
+ar    = '${CROSS_PREFIX}/llvm-ar'
+ld    = '${CROSS_PREFIX}/${ARCH_TRIPLET_VARIANT}${ANDROID_API}-clang++'
+strip = '${CROSS_PREFIX}/${ARCH_TRIPLET}-strip'
 
-      - name: Force Lock C++17 Standard (Override Gradle)
-        run: |
-          echo "=== Forçage absolu du C++17 dans le cache CMake ==="
-          sed -i '1i set(CMAKE_CXX_STANDARD 17 CACHE STRING "" FORCE)\nset(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "" FORCE)' libraries/decoder_av1/src/main/jni/CMakeLists.txt
-          sed -i '1i set(CMAKE_CXX_STANDARD 17 CACHE STRING "" FORCE)\nset(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "" FORCE)' libraries/decoder_av1/src/main/jni/libgav1/CMakeLists.txt
+[properties]
+needs_exe_wrapper = true
+c_link_args = ['-Wl,-z,max-page-size=16384']
+cpp_link_args = ['-Wl,-z,max-page-size=16384']
 
-      - name: Compile Real AAR with Native Libs
-        run: ./gradlew :lib-decoder-av1:assembleRelease --info
+[host_machine]
+system = 'linux'
+cpu_family = '${CPU_FAMILY}'
+cpu = '${CPU_FAMILY}'
+endian = 'little'
+EOF
 
-      - name: Upload Finished Real AAR
-        if: success()
+            cd dav1d
+            rm -rf "../${dir_name}" # Nettoyage complet
+            
+            # Lancement de Meson Setup
+            meson setup "../${dir_name}" --buildtype release --cross-file "../${user_config}" -Denable_tools=false -Denable_tests=false
+            
+            # Compilation native ultra-rapide avec Ninja
+            ninja -C "../${dir_name}"
+            
+            # Ton Hack SONAME : suppression de l'extension de version (.so.7 -> .so) pour la compatibilité Android
+            sed -i 's:libdav1d\.so\.[0-9]:libdav1d\.so\x0\x0:' $(readlink -f "../${dir_name}/src/libdav1d.so")
+            
+            # Exportation du fichier binaire compilé
+            mkdir -p "${PREBUILT_DIR}/lib/${ABI}"
+            cp "../${dir_name}/src/libdav1d.so" "${PREBUILT_DIR}/lib/${ABI}/libdav1d.so"
+            
+            cd ..
+          done
+          
+          # 3. Extraction et centralisation des fichiers d'en-tête (.h) requis pour ton projet
+          mkdir -p "${PREBUILT_DIR}/include/dav1d"
+          cp dav1d/include/dav1d/*.h "${PREBUILT_DIR}/include/dav1d/"
+          cp build-arm64-v8a/include/vcs_version.h "${PREBUILT_DIR}/include/dav1d/" 2>/dev/null || true
+          
+          echo "=== [SUCCESS] TOUTES LES LIBRARIES SONT PRÊTES IN THE POCKET ! ==="
+
+      - name: Upload Prebuilt dav1d Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: media3-decoder-gav1-1.5.1
-          path: |
-            **/*.aar
-
-      - name: Print All Possible Error Logs on Failure
-        if: failure()
-        run: |
-          echo "=== [DIAGNOSTIC] EXTRACTION COMPLÈTE DES RAPPORTS DE CONFIGURATION ==="
-          find libraries/decoder_av1/ -name "CMakeConfigureLog.yaml" -exec cat {} \; || true
-          find libraries/decoder_av1/ -name "CMakeError.log" -exec cat {} \; || true
+          name: libdav1d-android-prebuilt
+          path: ./prebuilt/dav1d/
