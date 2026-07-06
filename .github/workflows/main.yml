@@ -1,8 +1,8 @@
-name: Build Media3 Decoder AV1 Force Native
+name: Diagnostic Media3 AV1
 on: [workflow_dispatch]
 
 jobs:
-  build:
+  explore:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Media3 Source
@@ -11,40 +11,18 @@ jobs:
           repository: 'androidx/media'
           ref: '1.5.1'
 
-      - name: Setup Java JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'zulu'
-
-      - name: Setup Android SDK & NDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Compilers (Ninja, nasm)
+      - name: Structure du module AV1
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build nasm
-
-      - name: Find and Run AV1 Fetch Script
+          echo "=== 1. LISTE DE TOUS LES FICHIERS DE L'EXTENSION ==="
+          find libraries/decoder_av1 -type f
+          
+      - name: Inspection du script de build Gradle
         run: |
-          echo "=== Recherche du script fetch_dav1d.sh ==="
-          SCRIPT_PATH=$(find . -name "fetch_dav1d.sh" | head -n 1)
-          if [ -z "$SCRIPT_PATH" ]; then
-            echo "Erreur : Impossible de trouver fetch_dav1d.sh dans le dépôt !"
-            exit 1
+          echo "=== 2. CONTENU DU CONFIGURATION GRADLE ==="
+          if [ -f "libraries/decoder_av1/build.gradle" ]; then
+            cat libraries/decoder_av1/build.gradle
+          elif [ -f "libraries/decoder_av1/build.gradle.kts" ]; then
+            cat libraries/decoder_av1/build.gradle.kts
+          else
+            echo "Fichier de build introuvable !"
           fi
-          echo "Script trouvé ici : $SCRIPT_PATH"
-          SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
-          cd "$SCRIPT_DIR"
-          chmod +x fetch_dav1d.sh
-          ./fetch_dav1d.sh
-
-      - name: Compile Real AAR (Forcing Native Compilation)
-        run: ./gradlew :lib-decoder-av1:assembleRelease -PbuildNativeLibraries=true
-
-      - name: Upload Finished Real AAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: media3-decoder-av1-final
-          path: |
-            **/*.aar
