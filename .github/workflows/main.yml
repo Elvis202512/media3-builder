@@ -20,15 +20,10 @@ jobs:
       - name: Setup Android SDK & NDK
         uses: android-actions/setup-android@v3
 
-      - name: Install build dependencies (Meson, Ninja, nasm)
+      - name: Install Compilers (Ninja, nasm)
         run: |
           sudo apt-get update
-          sudo apt-get install -y meson ninja-build nasm
-
-      - name: Fetch AV1 Decoder Sources
-        run: |
-          cd libraries/decoder_av1/src/main/jni
-          ./fetch_dav1d.sh
+          sudo apt-get install -y ninja-build nasm
 
       - name: Compile AAR
         run: ./gradlew :libraries:decoder_av1:assembleRelease
